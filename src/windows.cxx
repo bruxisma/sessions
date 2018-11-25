@@ -40,10 +40,17 @@ std::vector<std::unique_ptr<char const[]>> initialize () {
   int argc;
   auto wargv = CommandLineToArgvW(cl, &argc);
   
-  // TODO: Finish implementing this
-
-
+  auto vec = std::vector<std::unique_ptr<char const[]>>();
+  vec.reserve(argc);
+  
+  for(size_t i = 0; i < argc; i++)
+  {
+    vec.push_back(to_utf8(wargv[i]));
+  }
+  
   LocalFree(wargv);
+
+  return vec;
 }
 
 auto const& vector () {
