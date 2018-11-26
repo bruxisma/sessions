@@ -43,7 +43,7 @@ std::vector<std::unique_ptr<char const[]>> initialize () {
   auto vec = std::vector<std::unique_ptr<char const[]>>();
   vec.reserve(argc);
   
-  for(size_t i = 0; i < argc; i++)
+  for(int i = 0; i < argc; i++)
   {
     vec.push_back(to_utf8(wargv[i]));
   }
@@ -59,14 +59,20 @@ auto const& vector () {
 }
 
 // _wenviron is still a depricated thing, but its way simpler to convert its
-// contents to utf8 then handle GetEnvironmentStrings manually
-char** initialize_environ()
+// contents to utf8 then to handle GetEnvironmentStrings manually
+const char** initialize_environ()
 {
+  // make sure _wenviron is initialized
+  // https://docs.microsoft.com/en-us/cpp/c-runtime-library/environ-wenviron?view=vs-2017#remarks
+  if (!_wenviron) {
+    _wgetenv(L"initpls");
+  }
+
   wchar_t** wide_environ = _wenviron;
   size_t var_count = 0;
-  while (*wide_environ++) var_count++;
+  while (wide_environ[var_count++]);
 
-  auto env = std::make_unique<char*[]>(var_count);
+  auto env = std::make_unique<const char*[]>(var_count);
   auto** result_it = env.get();
 
   for(auto current = *wide_environ; current; current = *++wide_environ, result_it++)
@@ -76,12 +82,6 @@ char** initialize_environ()
   }
 
   return env.release();
-}
-
-char**& p_environ()
-{
-  static char** env = initialize_environ();
-  return env;
 }
 
 } /* nameless namespace */
@@ -94,9 +94,9 @@ char const* argv (std::size_t idx) noexcept {
 
 int argc () noexcept { return static_cast<int>(vector().size()); }
 
-
 char const** envp () noexcept {
-  return p_environ();
+  static auto env = initialize_environ();
+  return env;
 }
 
 } /* namespace impl */
