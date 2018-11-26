@@ -60,7 +60,7 @@ auto const& vector () {
 
 // _wenviron is still a depricated thing, but its way simpler to convert its
 // contents to utf8 then to handle GetEnvironmentStrings manually
-const char** initialize_environ()
+auto initialize_environ()
 {
   // make sure _wenviron is initialized
   // https://docs.microsoft.com/en-us/cpp/c-runtime-library/environ-wenviron?view=vs-2017#remarks
@@ -81,7 +81,7 @@ const char** initialize_environ()
     *result_it = converted_var.release();
   }
 
-  return env.release();
+  return env;
 }
 
 } /* nameless namespace */
@@ -96,7 +96,7 @@ int argc () noexcept { return static_cast<int>(vector().size()); }
 
 char const** envp () noexcept {
   static auto env = initialize_environ();
-  return env;
+  return env.get();
 }
 
 } /* namespace impl */
