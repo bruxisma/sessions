@@ -16,9 +16,9 @@ struct environment
     // /* implementation-defined */ split () const;
   };
 
-  using value_range = /* implementation-defined */;
-  using key_range = /* implementation-defined */;
-  using iterator = /* implementation-defined */;
+  using value_range = void /* implementation-defined */;
+  using key_range = void /* implementation-defined */;
+  using iterator = void /* implementation-defined */;
   using value_type = variable;
   using size_type = size_t;
 
@@ -52,7 +52,7 @@ struct environment
 
 struct arguments
 {
-  using iterator = /* implementation-defined */;
+  class iterator;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using value_type = std::string_view;
   using index_type = size_t;

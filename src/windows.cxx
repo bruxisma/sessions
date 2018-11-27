@@ -1,15 +1,19 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#define _CRT_SECURE_NO_WARNINGS
 #include <Windows.h>
 #include <shellapi.h>
 
 #include <vector>
 #include <memory>
 #include <string>
+#include <stdexcept>
 
 #include <cstdlib>
 
 #include "impl.hpp"
+#include "ixm/session.hpp"
+
 
 namespace {
 
@@ -35,23 +39,25 @@ auto to_utf8 (wchar_t const* wstr) noexcept {
   return ptr;
 }
 
-std::vector<std::unique_ptr<char const[]>> initialize () {
+auto initialize () {
   auto cl = GetCommandLineW();
   int argc;
   auto wargv = CommandLineToArgvW(cl, &argc);
   
-  auto vec = std::vector<std::unique_ptr<char const[]>>();
+  auto vec = std::vector<char const*>();
   vec.reserve(argc);
   
   for(int i = 0; i < argc; i++)
   {
-    vec.push_back(to_utf8(wargv[i]));
+    vec.push_back(to_utf8(wargv[i]).release());
   }
   
   LocalFree(wargv);
 
   return vec;
 }
+
+const char** p_args = nullptr;
 
 auto const& vector () {
   static auto value = initialize();
@@ -89,7 +95,7 @@ auto initialize_environ()
 namespace impl {
 
 char const* argv (std::size_t idx) noexcept {
-  return ::vector()[idx].get();
+  return ::vector()[idx];
 }
 
 int argc () noexcept { return static_cast<int>(vector().size()); }
@@ -100,3 +106,119 @@ char const** envp () noexcept {
 }
 
 } /* namespace impl */
+
+namespace ixm::session 
+{
+    // env
+
+
+
+    // args
+    class arguments::iterator 
+    {
+    public:
+        using value_type = const char*;
+        using difference_type = ptrdiff_t;
+        using reference = value_type&;
+        using pointer = value_type*;
+        using iterator_category = std::random_access_iterator_tag;
+
+        explicit iterator(value_type arg=nullptr) : m_arg(arg) {
+
+        }
+
+        iterator& operator ++ () {
+            m_arg++;
+            return *this;
+        }
+
+        iterator& operator ++ (int) {
+            auto tmp = iterator(*this);
+            operator++();
+            return tmp;
+        }
+
+        bool operator == (const iterator& rhs) const {
+            return m_arg == rhs.m_arg;
+        }
+        
+        bool operator != (const iterator& rhs) const {
+            return m_arg != rhs.m_arg;
+        }
+
+        reference operator * () { return m_arg; }
+
+    private:
+        value_type m_arg = nullptr;
+    };
+
+
+    arguments::value_type arguments::operator [] (arguments::index_type idx) const noexcept
+    {
+        return impl::argv(idx + 1);
+    }
+
+    arguments::value_type arguments::at(arguments::index_type idx) const
+    {
+        if (idx >= size()) {
+            throw std::out_of_range("invalid arguments subscript");
+        }
+
+        return impl::argv(idx);
+    }
+
+    bool arguments::empty() const noexcept
+    {
+        return argc() <= 1;
+    }
+    
+    arguments::size_type arguments::size() const noexcept
+    {
+        return static_cast<size_type>(argc() - 1);
+    }
+
+    arguments::iterator arguments::cbegin () const noexcept
+    {
+        return iterator{impl::argv(1)};
+    }
+
+    arguments::iterator arguments::cend () const noexcept
+    {
+        return iterator{};
+    }
+
+    arguments::iterator arguments::begin () const noexcept
+    {
+        return cbegin();
+    }
+
+    arguments::iterator arguments::end () const noexcept
+    {
+        return cend();
+    }
+
+    arguments::reverse_iterator arguments::crbegin () const noexcept
+    {
+        return reverse_iterator{ cend() };
+    }
+
+    arguments::reverse_iterator arguments::crend () const noexcept
+    {
+        return reverse_iterator{ cbegin() };
+    }
+
+    arguments::reverse_iterator arguments::rbegin () const noexcept
+    {
+        return crbegin();
+    }
+
+    arguments::reverse_iterator arguments::rend () const noexcept
+    {
+        return crend();
+    }
+
+    char** arguments::argv() const noexcept
+    {
+        return const_cast<char**>(::vector().data());
+    }
+}
