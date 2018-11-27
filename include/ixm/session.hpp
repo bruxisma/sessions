@@ -61,12 +61,9 @@ struct arguments
     using pointer = value_type*;
     using iterator_category = std::random_access_iterator_tag;
 
-    explicit iterator(value_type arg=nullptr) : m_arg(arg) {}
+    explicit iterator(size_t index = 0);
 
-    iterator& operator ++ () {
-        m_arg++;
-        return *this;
-    }
+    iterator& operator ++ ();
 
     iterator& operator ++ (int) {
         auto tmp = iterator(*this);
@@ -86,6 +83,7 @@ struct arguments
 
   private:
       value_type m_arg = nullptr;
+      size_t m_idx = 0;
   };
 
   using reverse_iterator = std::reverse_iterator<iterator>;

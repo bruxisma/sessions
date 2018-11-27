@@ -44,12 +44,12 @@ auto initialize () {
   int argc;
   auto wargv = CommandLineToArgvW(cl, &argc);
   
-  auto vec = std::vector<char const*>();
-  vec.reserve(argc);
-  
-  for(int i = 0; i < argc; i++)
+  auto vec = std::vector<char const*>(argc, nullptr);
+
+  // copy cmdline except the executable path
+  for(int i = 1; i < argc; i++)
   {
-    vec.push_back(to_utf8(wargv[i]).release());
+    vec[i-1] = to_utf8(wargv[i]).release();
   }
   
   LocalFree(wargv);
@@ -96,6 +96,10 @@ char const* argv (std::size_t idx) noexcept {
   return ::vector()[idx];
 }
 
+char const** argv() noexcept { 
+    return ::vector().data();
+}
+
 int argc () noexcept { return static_cast<int>(vector().size()); }
 
 char const** envp () noexcept {
@@ -104,67 +108,3 @@ char const** envp () noexcept {
 }
 
 } /* namespace impl */
-
-namespace ixm::session 
-{
-    // env
-
-
-
-    // args
-    arguments::value_type arguments::operator [] (arguments::index_type idx) const noexcept
-    {
-        return impl::argv(idx + 1);
-    }
-
-    arguments::value_type arguments::at(arguments::index_type idx) const
-    {
-        if (idx >= size()) {
-            throw std::out_of_range("invalid arguments subscript");
-        }
-
-        return impl::argv(idx + 1);
-    }
-
-    bool arguments::empty() const noexcept
-    {
-        return argc() <= 1;
-    }
-    
-    arguments::size_type arguments::size() const noexcept
-    {
-        return static_cast<size_type>(argc() - 1);
-    }
-
-    arguments::iterator arguments::cbegin () const noexcept
-    {
-        return iterator{impl::argv(1)};
-    }
-
-    arguments::iterator arguments::cend () const noexcept
-    {
-        return iterator{};
-    }
-
-
-    arguments::reverse_iterator arguments::crbegin () const noexcept
-    {
-        return reverse_iterator{ cend() };
-    }
-
-    arguments::reverse_iterator arguments::crend () const noexcept
-    {
-        return reverse_iterator{ cbegin() };
-    }
-
-
-    const char** arguments::argv() const noexcept
-    {
-        return ::vector().data();
-    }
-
-    int arguments::argc() const noexcept
-    {
-        return impl::argc();
-    }
-}

@@ -7,6 +7,7 @@
 namespace impl {
 
 char const* argv (std::size_t) noexcept;
+char const** argv() noexcept;
 int argc () noexcept;
 
 char const** envp () noexcept;
