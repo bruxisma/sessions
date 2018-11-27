@@ -23,7 +23,7 @@ struct environment
   using size_type = size_t;
 
   template <class T>
-  value_type operator [] (T const&) const; // see below
+  value_type operator [] (T const&) const;
 
   value_type operator [] (std::string const&) const noexcept;
   value_type operator [] (std::string_view) const;
@@ -76,7 +76,7 @@ struct arguments
   reverse_iterator rbegin () const noexcept;
   reverse_iterator rend () const noexcept;
 
-  [[nodiscard]] char** argv () const noexcept;
+  [[nodiscard]] const char** argv () const noexcept;
   [[nodiscard]] int argc () const noexcept;
 };
 

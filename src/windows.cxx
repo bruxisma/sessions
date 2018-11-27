@@ -57,9 +57,7 @@ auto initialize () {
   return vec;
 }
 
-const char** p_args = nullptr;
-
-auto const& vector () {
+auto& vector () {
   static auto value = initialize();
   return value;
 }
@@ -164,7 +162,7 @@ namespace ixm::session
             throw std::out_of_range("invalid arguments subscript");
         }
 
-        return impl::argv(idx);
+        return impl::argv(idx + 1);
     }
 
     bool arguments::empty() const noexcept
@@ -217,8 +215,13 @@ namespace ixm::session
         return crend();
     }
 
-    char** arguments::argv() const noexcept
+    const char** arguments::argv() const noexcept
     {
-        return const_cast<char**>(::vector().data());
+        return ::vector().data();
+    }
+
+    int arguments::argc() const noexcept
+    {
+        return impl::argc();
     }
 }
