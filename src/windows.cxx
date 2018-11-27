@@ -112,45 +112,6 @@ namespace ixm::session
 
 
     // args
-    class arguments::iterator 
-    {
-    public:
-        using value_type = const char*;
-        using difference_type = ptrdiff_t;
-        using reference = value_type&;
-        using pointer = value_type*;
-        using iterator_category = std::random_access_iterator_tag;
-
-        explicit iterator(value_type arg=nullptr) : m_arg(arg) {
-
-        }
-
-        iterator& operator ++ () {
-            m_arg++;
-            return *this;
-        }
-
-        iterator& operator ++ (int) {
-            auto tmp = iterator(*this);
-            operator++();
-            return tmp;
-        }
-
-        bool operator == (const iterator& rhs) const {
-            return m_arg == rhs.m_arg;
-        }
-        
-        bool operator != (const iterator& rhs) const {
-            return m_arg != rhs.m_arg;
-        }
-
-        reference operator * () { return m_arg; }
-
-    private:
-        value_type m_arg = nullptr;
-    };
-
-
     arguments::value_type arguments::operator [] (arguments::index_type idx) const noexcept
     {
         return impl::argv(idx + 1);
@@ -185,15 +146,6 @@ namespace ixm::session
         return iterator{};
     }
 
-    arguments::iterator arguments::begin () const noexcept
-    {
-        return cbegin();
-    }
-
-    arguments::iterator arguments::end () const noexcept
-    {
-        return cend();
-    }
 
     arguments::reverse_iterator arguments::crbegin () const noexcept
     {
@@ -205,15 +157,6 @@ namespace ixm::session
         return reverse_iterator{ cbegin() };
     }
 
-    arguments::reverse_iterator arguments::rbegin () const noexcept
-    {
-        return crbegin();
-    }
-
-    arguments::reverse_iterator arguments::rend () const noexcept
-    {
-        return crend();
-    }
 
     const char** arguments::argv() const noexcept
     {

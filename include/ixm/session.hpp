@@ -52,7 +52,42 @@ struct environment
 
 struct arguments
 {
-  class iterator;
+  class iterator
+  {
+  public:
+    using value_type = const char*;
+    using difference_type = ptrdiff_t;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using iterator_category = std::random_access_iterator_tag;
+
+    explicit iterator(value_type arg=nullptr) : m_arg(arg) {}
+
+    iterator& operator ++ () {
+        m_arg++;
+        return *this;
+    }
+
+    iterator& operator ++ (int) {
+        auto tmp = iterator(*this);
+        operator++();
+        return tmp;
+    }
+
+    bool operator == (const iterator& rhs) const {
+        return m_arg == rhs.m_arg;
+    }
+    
+    bool operator != (const iterator& rhs) const {
+        return m_arg != rhs.m_arg;
+    }
+
+    reference operator * () { return m_arg; }
+
+  private:
+      value_type m_arg = nullptr;
+  };
+
   using reverse_iterator = std::reverse_iterator<iterator>;
   using value_type = std::string_view;
   using index_type = size_t;
@@ -67,14 +102,14 @@ struct arguments
   iterator cbegin () const noexcept;
   iterator cend () const noexcept;
 
-  iterator begin () const noexcept;
-  iterator end () const noexcept;
+  iterator begin () const noexcept { return cbegin(); }
+  iterator end () const noexcept   { return cend(); }
 
   reverse_iterator crbegin () const noexcept;
   reverse_iterator crend () const noexcept;
 
-  reverse_iterator rbegin () const noexcept;
-  reverse_iterator rend () const noexcept;
+  reverse_iterator rbegin () const noexcept { return crbegin(); }
+  reverse_iterator rend () const noexcept { return crend(); }
 
   [[nodiscard]] const char** argv () const noexcept;
   [[nodiscard]] int argc () const noexcept;
