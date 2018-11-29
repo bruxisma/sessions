@@ -12,7 +12,6 @@
 #include <cstdlib>
 
 #include "impl.hpp"
-#include "ixm/session.hpp"
 
 
 namespace {
@@ -39,17 +38,16 @@ auto to_utf8 (wchar_t const* wstr) noexcept {
   return ptr;
 }
 
-auto initialize () {
+auto initialize_args () {
   auto cl = GetCommandLineW();
-  int argc;
-  auto wargv = CommandLineToArgvW(cl, &argc);
-  
+  int argc; // skip invoke command
+  auto wargv = CommandLineToArgvW(cl, &argc)+1;
+
   auto vec = std::vector<char const*>(argc, nullptr);
 
-  // copy cmdline except the executable path
-  for(int i = 1; i < argc; i++)
+  for(int i = 0; i < argc-1; i++)
   {
-    vec[i-1] = to_utf8(wargv[i]).release();
+    vec[i] = to_utf8(wargv[i]).release();
   }
   
   LocalFree(wargv);
@@ -57,8 +55,8 @@ auto initialize () {
   return vec;
 }
 
-auto& vector () {
-  static auto value = initialize();
+auto& args_vector () {
+  static auto value = initialize_args();
   return value;
 }
 
@@ -93,18 +91,20 @@ auto initialize_environ()
 namespace impl {
 
 char const* argv (std::size_t idx) noexcept {
-  return ::vector()[idx];
+  return ::args_vector()[idx];
 }
 
 char const** argv() noexcept { 
-    return ::vector().data();
+    return ::args_vector().data();
 }
 
-int argc () noexcept { return static_cast<int>(vector().size()); }
+int argc () noexcept { return static_cast<int>(args_vector().size()); }
 
 char const** envp () noexcept {
   static auto env = initialize_environ();
   return env.get();
 }
+
+const char path_sep = ';';
 
 } /* namespace impl */
