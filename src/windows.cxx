@@ -72,18 +72,17 @@ auto initialize_environ()
 
   wchar_t** wide_environ = _wenviron;
   size_t var_count = 0;
-  while (wide_environ[var_count++]);
+  while (wide_environ[var_count])
+    var_count++;
 
-  auto env = std::make_unique<const char*[]>(var_count);
-  auto** result_it = env.get();
+  auto vec = std::vector<char const*>(var_count+1, nullptr);
 
-  for(auto current = *wide_environ; current; current = *++wide_environ, result_it++)
+  for (size_t i = 0; i < var_count; i++)
   {
-    auto converted_var = to_utf8(current);
-    *result_it = converted_var.release();
+    vec[i] = to_utf8(wide_environ[i]).release();
   }
 
-  return env;
+  return vec;
 }
 
 } /* nameless namespace */
@@ -102,9 +101,9 @@ int argc () noexcept { return static_cast<int>(args_vector().size()); }
 
 char const** envp () noexcept {
   static auto env = initialize_environ();
-  return env.get();
+  return env.data();
 }
 
-const char path_sep = ';';
+const char env_path_sep = ';';
 
 } /* namespace impl */

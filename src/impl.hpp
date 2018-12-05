@@ -11,7 +11,7 @@ char const** argv() noexcept;
 int argc () noexcept;
 
 char const** envp () noexcept;
-extern const char path_sep;
+extern const char env_path_sep;
 
 } /* namespace impl */
 
