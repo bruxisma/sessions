@@ -12,7 +12,7 @@ char const** argv() noexcept;
 int argc () noexcept;
 
 char const** envp () noexcept;
-void set_env(const char*, const char*) noexcept;
+void set_env_var(const char*, const char*) noexcept;
 extern const char env_path_sep;
 
 
@@ -26,13 +26,15 @@ public:
     using iterator_category = std::random_access_iterator_tag;
 
     explicit charbuff_iterator(const char** buff = nullptr, size_t index = 0) :
-        m_buff(buff), m_idx(index)
+        m_idx(index), m_buff(buff)
     {
+        if (m_buff)
+            m_current = m_buff[m_idx];
     }
 
     charbuff_iterator& operator ++ ()
     {
-        ++m_buff;
+        m_current = m_buff[++m_idx];
         return *this;
     }
 
@@ -43,22 +45,21 @@ public:
     }
 
     bool operator == (const charbuff_iterator& rhs) const {
-        return current() == rhs.current();
+        return m_current == rhs.m_current;
     }
 
     bool operator != (const charbuff_iterator& rhs) const {
-        return current() != rhs.current();
+        return !(*this == rhs);
     }
 
-    reference operator * () { return current(); }
-
-protected:
-    reference current() const { return m_buff[m_idx]; }
-    reference current() { return m_buff[m_idx]; }
+    reference operator * () {
+        return m_current;
+    }
 
 private:
-    const char** m_buff = nullptr;
     size_t m_idx = 0;
+    const char** m_buff = nullptr;
+    const char* m_current = nullptr;
 };
 
 } /* namespace impl */

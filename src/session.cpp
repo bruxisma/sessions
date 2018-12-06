@@ -1,7 +1,42 @@
-#include "impl.hpp"
 #include "ixm/session.hpp"
 #include <cstdlib>
+#include <algorithm>
 
+
+namespace
+{
+    struct ci_char_traits : public std::char_traits<char> {
+        static char to_upper(char ch) {
+            return toupper((unsigned char)ch);
+        }
+        static bool eq(char c1, char c2) {
+            return to_upper(c1) == to_upper(c2);
+        }
+        static bool lt(char c1, char c2) {
+            return to_upper(c1) < to_upper(c2);
+        }
+        static int compare(const char* s1, const char* s2, size_t n) {
+            while (n-- != 0) {
+                if (to_upper(*s1) < to_upper(*s2)) return -1;
+                if (to_upper(*s1) > to_upper(*s2)) return 1;
+                ++s1; ++s2;
+            }
+            return 0;
+        }
+        static const char* find(const char* s, int n, char a) {
+            auto const ua(to_upper(a));
+            while (n-- != 0)
+            {
+                if (to_upper(*s) == ua)
+                    return s;
+                s++;
+            }
+            return nullptr;
+        }
+    };
+
+    using ci_string_view = std::basic_string_view<char, ci_char_traits>;
+}
 
 namespace ixm::session 
 {
@@ -10,11 +45,12 @@ namespace ixm::session
     {
         return m_value;
     }
-
+    
     auto environment::variable::operator=(std::string_view str) -> variable&
     {
+        // TODO: check for null termination
         m_value = str;
-        impl::set_env(m_key.data(), m_value.data());
+        impl::set_env_var(key().data(), m_value.data());
         return *this;
     }
 
@@ -23,51 +59,69 @@ namespace ixm::session
         return m_key;
     }
 
-    environment::variable::variable(const char* ptr)
+
+    auto environment::operator[] (const std::string& str) const noexcept -> variable
     {
-        m_key = ptr;
-        
-        auto eqpos = m_key.find('=');
-        if (eqpos == std::string_view::npos)
+        return operator[](str.c_str());
+    }
+
+    auto environment::operator[] (std::string_view str) const -> variable
+    {
+        auto[result, value] = search_env(str);
+
+        return result ? variable{ str, value } : variable{};
+    }
+
+    auto environment::operator[] (const char*str) const noexcept -> variable
+    {
+        return operator[](std::string_view{ str });
+    }
+
+    bool environment::contains(std::string_view thingy) const noexcept
+    {
+        auto[result, ignore] = search_env(thingy);
+
+        return result;
+    }
+
+    auto environment::cbegin() const noexcept -> iterator
+    {
+        return iterator{ m_envp };
+    }
+
+    auto environment::cend() const noexcept -> iterator
+    {
+        return iterator{};
+    }
+
+    std::pair<bool, std::string_view> environment::search_env(std::string_view thingy) const noexcept
+    {
+        ci_string_view key{ thingy.data(), thingy.length() };
+
+        for (size_t i = 0; m_envp[i]; i++)
         {
-            m_key = {};
-            return;
+            ci_string_view current = m_envp[i];
+            auto eqpos = current.find('=');
+
+            auto ck = current;
+            std::string_view cv = { current.data(), current.length() };
+
+            ck.remove_suffix(current.size() - eqpos);
+
+            if (ck == key)
+            {
+                cv.remove_prefix(eqpos + 1);
+                return { true, cv };
+            }
         }
 
-        m_value = m_key.substr(eqpos);
-        m_key.remove_suffix(m_key.length() - eqpos);
+        return { false, {} };
     }
 
-
-    environment::iterator::iterator(size_t idx)
-    {
-        m_envp = impl::envp();
-        m_arg = *(m_envp + idx);
-    }
-
-    auto environment::iterator::operator++() -> iterator&
-    {
-        m_arg = *++m_envp;
-        return *this;
-    }
 
 
     // args
-    //arguments::iterator::iterator(size_t index) : m_idx(index)
-    //{
-    //    m_arg = impl::argv(m_idx);
-    //}
-
-    //auto arguments::iterator::operator++() -> iterator&
-    //{
-    //    m_arg = impl::argv(++m_idx);
-    //    return *this;
-    //}
-
-
-
-
-    arguments::value_type arguments::operator [] (arguments::index_type idx) const noexcept
+    auto arguments::operator [] (arguments::index_type idx) const noexcept -> value_type
     {
         return impl::argv(idx);
     }

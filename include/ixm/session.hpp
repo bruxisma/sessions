@@ -11,77 +11,42 @@ namespace ixm::session {
 
     struct environment
     {
-        class iterator;
-
         class variable
         {
-            friend iterator;
+            friend environment;
 
         public:
             operator std::string_view() const noexcept;
             variable& operator = (std::string_view);
             std::string_view key() const noexcept;
             // /* implementation-defined */ split () const;
-
-            bool operator == (const variable& rhs) const {
-                return m_value == rhs.m_value;
-            }
-
-            bool operator != (const variable& rhs) const {
-                return !(*this == rhs);
-            }
-
         private:
-            explicit variable(const char* key = nullptr);
+            variable() = default;
+            variable(std::string_view key_, std::string_view value_)
+                : m_value(value_), m_key(key_)
+            {
+            }
 
-            std::string_view m_key, m_value;
+            std::string_view m_value, m_key;
         };
 
-        class iterator
-        {
-        public:
-            using value_type = variable;
-            using difference_type = ptrdiff_t;
-            using reference = value_type & ;
-            using pointer = value_type * ;
-            using iterator_category = std::random_access_iterator_tag;
-
-            explicit iterator(size_t idx = 0);
-
-            iterator& operator ++ ();
-
-            iterator& operator ++ (int) {
-                auto tmp = iterator(*this);
-                operator++();
-                return tmp;
-            }
-
-            bool operator == (const iterator& rhs) const {
-                return m_arg == rhs.m_arg;
-            }
-
-            bool operator != (const iterator& rhs) const {
-                return m_arg != rhs.m_arg;
-            }
-
-            reference operator * () { return m_arg; }
-
-        private:
-            value_type m_arg;
-            const char** m_envp;
-        };
-
-        using value_range = void /* implementation-defined */;
-        using key_range = void /* implementation-defined */;
+        using iterator = impl::charbuff_iterator;
+        //using value_range = void /* implementation-defined */;
+        //using key_range = void /* implementation-defined */;
         using value_type = variable;
         using size_type = size_t;
 
-        template <class T>
-        value_type operator [] (T const&) const;
+        environment() : m_envp(impl::envp())
+        {
+            while (m_envp[m_envsize]) m_envsize++;
+        }
 
-        value_type operator [] (std::string const&) const noexcept;
-        value_type operator [] (std::string_view) const;
-        value_type operator [] (char const*) const noexcept;
+        //template <class T>
+        //variable operator [] (T const&) const;
+
+        variable operator [] (std::string const&) const noexcept;
+        variable operator [] (std::string_view) const;
+        variable operator [] (char const*) const noexcept;
 
         template <class K>
         iterator find(K const&) const noexcept;
@@ -91,17 +56,23 @@ namespace ixm::session {
         iterator cbegin() const noexcept;
         iterator cend() const noexcept;
 
-        iterator begin() const noexcept;
-        iterator end() const noexcept;
+        iterator begin() const noexcept { return cbegin(); }
+        iterator end() const noexcept { return cend(); }
 
-        size_type size() const noexcept;
-        bool empty() const noexcept;
+        size_type size() const noexcept { return m_envsize; }
+        bool empty() const noexcept { return m_envsize == 0; }
 
-        value_range values() const noexcept;
-        key_range keys() const noexcept;
+        //value_range values() const noexcept;
+        //key_range keys() const noexcept;
 
         template <class K>
         void erase(K const&) noexcept;
+
+    private:
+        std::pair<bool, std::string_view> search_env(std::string_view) const noexcept;
+
+        const char** m_envp = nullptr;
+        size_type m_envsize = 0;
     };
 
     struct arguments

@@ -8,13 +8,20 @@
 #include <memory>
 #include <string>
 #include <stdexcept>
+#include <system_error>
 
 #include <cstdlib>
 
-#include "impl.hpp"
+#include "ixm/impl.hpp"
 
 
 namespace {
+
+    [[noreturn]]
+    void throw_error(DWORD error = GetLastError())
+    {
+        throw std::system_error(std::error_code{ static_cast<int>(error), std::system_category() });
+    }
 
     auto narrow(wchar_t const* wstr, char* ptr = nullptr, int length = 0) {
         return WideCharToMultiByte(
@@ -28,13 +35,36 @@ namespace {
             nullptr);
     }
 
-    auto to_utf8(wchar_t const* wstr) noexcept {
-        // This entire function is a mess, but at least we can do a damn
-        // conversion. Still though, it's *yikes* all around.
-        // XXX: Need to do some basic error handling...
+    auto wide(const char* nstr, wchar_t* ptr = nullptr, int lenght = 0) {
+        return MultiByteToWideChar(
+            CP_UTF8,
+            MB_ERR_INVALID_CHARS,
+            nstr,
+            -1,
+            ptr,
+            lenght
+        );
+    }
+
+    auto to_utf8(wchar_t const* wstr) {
         auto length = narrow(wstr);
         auto ptr = std::make_unique<char[]>(length);
         auto result = narrow(wstr, ptr.get(), length);
+
+        if (result == 0)
+            throw_error();
+
+        return ptr;
+    }
+
+    auto to_utf16(const char* nstr) {
+        auto length = wide(nstr);
+        auto ptr = std::make_unique<wchar_t[]>(length);
+        auto result = wide(nstr, ptr.get(), length);
+        
+        if (result == 0)
+            throw_error();
+
         return ptr;
     }
 
@@ -60,6 +90,9 @@ namespace {
         return value;
     }
 
+
+    std::unique_ptr<const char*[]> p_environ;
+    std::vector<std::unique_ptr<char[]>> env_vector;
     // _wenviron is still a depricated thing, but its way simpler to convert its
     // contents to utf8 then to handle GetEnvironmentStrings manually
     auto initialize_environ()
@@ -72,20 +105,28 @@ namespace {
 
         wchar_t** wide_environ = _wenviron;
         size_t var_count = 0;
-        while (wide_environ[var_count])
-            var_count++;
+        while (wide_environ[var_count]) var_count++;
 
-        auto vec = std::vector<char const*>(var_count + 1, nullptr);
+        // TODO: this sucks D:
+        // vec handles lifetime
+        auto vec = std::vector<std::unique_ptr<char[]>>();
+        vec.reserve(var_count + 1);
+        auto env = std::make_unique<const char*[]>(var_count + 1);
 
         for (size_t i = 0; i < var_count; i++)
         {
-            vec[i] = to_utf8(wide_environ[i]).release();
+            auto elem = to_utf8(wide_environ[i]);
+
+            env[i] = elem.get();
+            vec.push_back(std::move(elem));
         }
 
-        return vec;
+        vec.emplace_back();
+
+        env_vector.swap(vec);
+        p_environ.swap(env);
     }
 
-    std::vector<char const*> env_vector;
 
 } /* nameless namespace */
 
@@ -102,12 +143,16 @@ namespace impl {
     int argc() noexcept { return static_cast<int>(args_vector().size()); }
 
     char const** envp() noexcept {
-        env_vector = initialize_environ();
-        return ::env_vector.data();
+        initialize_environ();
+        return p_environ.get();
     }
 
-    void set_env(const char* key, const char* value) noexcept
+    void set_env_var(const char* key, const char* value) noexcept
     {
+        //auto wkey   = to_utf16(key);
+        //auto wvalue = to_utf16(value);
+        //auto ec = _wputenv_s(wkey.get(), wvalue.get());
+
         auto ec = _putenv_s(key, value);
         _ASSERTE(ec == 0);
     }

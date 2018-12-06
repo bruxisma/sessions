@@ -10,12 +10,25 @@ int main(int argc, char const *argv[])
     ixm::session::arguments args;
     bool argc_check = args.argc() == argc;
     auto a1 = args[0];
-    //auto env = impl::envp();
     
+    ixm::session::environment env;
+    auto val = env["USERPROFILE"];
+
     int i = 0;
+    std::cout << "Args:\n";
+
+
     for (auto& a : args)
     {
         std::cout << i++ << ": " << a << '\n';
+    }
+
+    i = 0;
+    std::cout << "\nEnv:\n";
+
+    for (auto e : env)
+    {
+        std::cout << i++ << ": " << e << '\n';
     }
 
     return 0;
