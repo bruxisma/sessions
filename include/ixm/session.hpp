@@ -20,6 +20,15 @@ namespace ixm::session {
             variable& operator = (std::string_view);
             std::string_view key() const noexcept;
             // /* implementation-defined */ split () const;
+
+            bool operator == (const variable& rhs) {
+                return key() == rhs.key() && m_value == rhs.m_value;
+            }
+
+            bool operator != (const variable& rhs) {
+                return !(*this == rhs);
+            }
+
         private:
             variable() = default;
             variable(std::string_view key_, std::string_view value_)
@@ -36,9 +45,9 @@ namespace ixm::session {
         using value_type = variable;
         using size_type = size_t;
 
-        environment() : m_envp(impl::envp())
+        environment()
         {
-            while (m_envp[m_envsize]) m_envsize++;
+            while (impl::envp()[m_envsize]) m_envsize++;
         }
 
         //template <class T>
@@ -69,9 +78,8 @@ namespace ixm::session {
         void erase(K const&) noexcept;
 
     private:
-        std::pair<bool, std::string_view> search_env(std::string_view) const noexcept;
+        std::pair<size_t, std::string_view> search_env(std::string_view) const noexcept;
 
-        const char** m_envp = nullptr;
         size_type m_envsize = 0;
     };
 

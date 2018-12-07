@@ -50,7 +50,7 @@ namespace ixm::session
     {
         // TODO: check for null termination
         m_value = str;
-        impl::set_env_var(key().data(), m_value.data());
+        impl::set_env_var(key().data(), str.data());
         return *this;
     }
 
@@ -69,7 +69,7 @@ namespace ixm::session
     {
         auto[result, value] = search_env(str);
 
-        return result ? variable{ str, value } : variable{};
+        return result != ci_string_view::npos ? variable{ str, value } : variable{};
     }
 
     auto environment::operator[] (const char*str) const noexcept -> variable
@@ -79,14 +79,12 @@ namespace ixm::session
 
     bool environment::contains(std::string_view thingy) const noexcept
     {
-        auto[result, ignore] = search_env(thingy);
-
-        return result;
+        return search_env(thingy).first != ci_string_view::npos;
     }
 
     auto environment::cbegin() const noexcept -> iterator
     {
-        return iterator{ m_envp };
+        return iterator{ impl::envp() };
     }
 
     auto environment::cend() const noexcept -> iterator
@@ -94,13 +92,13 @@ namespace ixm::session
         return iterator{};
     }
 
-    std::pair<bool, std::string_view> environment::search_env(std::string_view thingy) const noexcept
+    std::pair<size_t, std::string_view> environment::search_env(std::string_view thingy) const noexcept
     {
         ci_string_view key{ thingy.data(), thingy.length() };
 
-        for (size_t i = 0; m_envp[i]; i++)
+        for (size_t i = 0; impl::envp()[i]; i++)
         {
-            ci_string_view current = m_envp[i];
+            ci_string_view current = impl::envp()[i];
             auto eqpos = current.find('=');
 
             auto ck = current;
@@ -111,11 +109,11 @@ namespace ixm::session
             if (ck == key)
             {
                 cv.remove_prefix(eqpos + 1);
-                return { true, cv };
+                return { i, cv };
             }
         }
 
-        return { false, {} };
+        return { ci_string_view::npos, {} };
     }
 
 

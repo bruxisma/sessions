@@ -91,41 +91,70 @@ namespace {
     }
 
 
-    std::unique_ptr<const char*[]> p_environ;
-    std::vector<std::unique_ptr<char[]>> env_vector;
-    // _wenviron is still a depricated thing, but its way simpler to convert its
-    // contents to utf8 then to handle GetEnvironmentStrings manually
-    auto initialize_environ()
+    class environ_table
     {
-        // make sure _wenviron is initialized
-        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/environ-wenviron?view=vs-2017#remarks
-        if (!_wenviron) {
-            _wgetenv(L"initpls");
-        }
-
-        wchar_t** wide_environ = _wenviron;
-        size_t var_count = 0;
-        while (wide_environ[var_count]) var_count++;
-
-        // TODO: this sucks D:
-        // vec handles lifetime
-        auto vec = std::vector<std::unique_ptr<char[]>>();
-        vec.reserve(var_count + 1);
-        auto env = std::make_unique<const char*[]>(var_count + 1);
-
-        for (size_t i = 0; i < var_count; i++)
+    public:
+        environ_table()
         {
-            auto elem = to_utf8(wide_environ[i]);
-
-            env[i] = elem.get();
-            vec.push_back(std::move(elem));
+            init_env();
         }
 
-        vec.emplace_back();
+        ~environ_table()
+        {
+            free_items();
+        }
 
-        env_vector.swap(vec);
-        p_environ.swap(env);
-    }
+
+        operator char const**() {
+            if (!m_valid) {
+                free_items();
+                init_env();
+            }
+
+            return m_env.data();
+        }
+
+
+        void invalidate() noexcept { m_valid = false; }
+
+    private:
+        void init_env()
+        {
+            // make sure _wenviron is initialized
+            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/environ-wenviron?view=vs-2017#remarks
+            if (!_wenviron) {
+                _wgetenv(L"initpls");
+            }
+
+            wchar_t** wide_environ = _wenviron;
+
+            m_env.clear();
+            
+            for (size_t i = 0; wide_environ[i]; i++)
+            {
+                m_env.push_back(to_utf8(wide_environ[i]).release());
+            }
+
+            m_env.emplace_back(); // terminating null
+            
+            m_valid = true;
+        }
+
+        void free_items() noexcept
+        {
+            // delete converted items
+            for (auto& elem : m_env) {
+                // TODO: assumes default deleter
+                delete[] elem;
+            }
+
+            invalidate();
+        }
+
+        bool m_valid;
+        std::vector<char const*> m_env;
+    
+    } g_env;
 
 
 } /* nameless namespace */
@@ -143,18 +172,14 @@ namespace impl {
     int argc() noexcept { return static_cast<int>(args_vector().size()); }
 
     char const** envp() noexcept {
-        initialize_environ();
-        return p_environ.get();
+        return g_env;
     }
 
     void set_env_var(const char* key, const char* value) noexcept
     {
-        //auto wkey   = to_utf16(key);
-        //auto wvalue = to_utf16(value);
-        //auto ec = _wputenv_s(wkey.get(), wvalue.get());
-
         auto ec = _putenv_s(key, value);
         _ASSERTE(ec == 0);
+        g_env.invalidate();
     }
 
     const char env_path_sep = ';';
