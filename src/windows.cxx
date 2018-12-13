@@ -4,21 +4,21 @@
 #include <Windows.h>
 #include <shellapi.h>
 
+#include <algorithm>
 #include <vector>
 #include <memory>
-#include <string>
-#include <stdexcept>
 #include <system_error>
 
 #include <cstdlib>
 
-#include "ixm/impl.hpp"
+#include "impl.hpp"
+#include "ixm/session_impl.hpp"
 
 
 namespace {
 
     [[noreturn]]
-    void throw_error(DWORD error = GetLastError())
+    void throw_win_error(DWORD error = GetLastError())
     {
         throw std::system_error(std::error_code{ static_cast<int>(error), std::system_category() });
     }
@@ -52,7 +52,7 @@ namespace {
         auto result = narrow(wstr, ptr.get(), length);
 
         if (result == 0)
-            throw_error();
+            throw_win_error();
 
         return ptr;
     }
@@ -63,19 +63,19 @@ namespace {
         auto result = wide(nstr, ptr.get(), length);
         
         if (result == 0)
-            throw_error();
+            throw_win_error();
 
         return ptr;
     }
 
     auto initialize_args() {
         auto cl = GetCommandLineW();
-        int argc; // skip invoke command
-        auto wargv = CommandLineToArgvW(cl, &argc) + 1;
+        int argc;
+        auto wargv = CommandLineToArgvW(cl, &argc);
 
-        auto vec = std::vector<char const*>(argc, nullptr);
+        auto vec = std::vector<char const*>(argc+1, nullptr);
 
-        for (int i = 0; i < argc - 1; i++)
+        for (int i = 0; i < argc; i++)
         {
             vec[i] = to_utf8(wargv[i]).release();
         }
@@ -90,35 +90,14 @@ namespace {
         return value;
     }
 
+    using namespace ixm::session::detail;
 
     class environ_table
     {
+        using env_iterator = std::vector<const char*>::iterator;
+
     public:
         environ_table()
-        {
-            init_env();
-        }
-
-        ~environ_table()
-        {
-            free_items();
-        }
-
-
-        operator char const**() {
-            if (!m_valid) {
-                free_items();
-                init_env();
-            }
-
-            return m_env.data();
-        }
-
-
-        void invalidate() noexcept { m_valid = false; }
-
-    private:
-        void init_env()
         {
             // make sure _wenviron is initialized
             // https://docs.microsoft.com/en-us/cpp/c-runtime-library/environ-wenviron?view=vs-2017#remarks
@@ -126,12 +105,91 @@ namespace {
                 _wgetenv(L"initpls");
             }
 
+            init_env();
+        }
+
+        ~environ_table()
+        {
+            free_env();
+        }
+
+
+        char const** data() {
+            return m_env.data();
+        }
+
+        size_t size() const noexcept { return m_env.size() - 1; }
+
+        auto begin() noexcept { return m_env.begin(); }
+        auto end() noexcept { return m_env.end() - 1; }
+
+        
+        auto getvar(ci_string_view key) noexcept
+        {
+            auto it = getvarline(key);
+            return it != m_env.end() ? *it + key.length() + 1 : nullptr;
+        }
+
+        void setvar(std::string_view key, std::string_view value)
+        {
+            auto varline = make_varline(key, value);
+            auto it = getvarline({key.data(), key.length()});
+            
+            if (it == end()) {
+                // insert b4 the terminating null
+                m_env.insert(end(), varline.release());
+            }
+            else {
+                const char* old = *it;
+                *it = varline.release();
+                delete[] old;
+            }
+
+            _putenv_s(key.data(), value.data());
+        }
+
+        void rmvar(const char* key) 
+        {
+            auto it = getvarline(key);
+            if (it == m_env.end()) 
+                return;
+
+            m_env.erase(it);
+            _putenv_s(key, "");
+        }
+
+    private:
+        auto getvarline(ci_string_view key) noexcept -> env_iterator
+        {
+            return std::find_if(begin(), end(), 
+            [&](ci_string_view entry){
+                return 
+                    entry.length() > key.length() &&
+                    entry[key.length()] == '=' &&
+                    entry.compare(0, key.size(), key) == 0;
+            });
+        }
+
+        auto make_varline(std::string_view key, std::string_view value) -> std::unique_ptr<char[]>
+        {
+            const auto buffer_sz = key.size()+value.size()+2;
+            auto buffer = std::make_unique<char[]>(buffer_sz);
+            key.copy(buffer.get(), key.size());
+            buffer[key.size()] = '=';
+            value.copy(buffer.get() + key.size() + 1, value.size());
+
+            return buffer;
+        }
+
+        void init_env()
+        {
             wchar_t** wide_environ = _wenviron;
 
-            m_env.clear();
+            free_env();
             
             for (size_t i = 0; wide_environ[i]; i++)
             {
+                // we own the converted strings
                 m_env.push_back(to_utf8(wide_environ[i]).release());
             }
 
@@ -140,7 +198,7 @@ namespace {
             m_valid = true;
         }
 
-        void free_items() noexcept
+        void free_env() noexcept
         {
             // delete converted items
             for (auto& elem : m_env) {
@@ -148,13 +206,13 @@ namespace {
                 delete[] elem;
             }
 
-            invalidate();
+            m_env.clear();
         }
 
         bool m_valid;
         std::vector<char const*> m_env;
     
-    } g_env;
+    } environ_;
 
 
 } /* nameless namespace */
@@ -169,17 +227,29 @@ namespace impl {
         return ::args_vector().data();
     }
 
-    int argc() noexcept { return static_cast<int>(args_vector().size()); }
+    int argc() noexcept { return static_cast<int>(args_vector().size()) - 1; }
 
     char const** envp() noexcept {
-        return g_env;
+        return environ_.data();
+    }
+
+    size_t env_size() {
+        return environ_.size();
+    }
+
+    char const* get_env_var(char const* key) noexcept
+    {
+        return environ_.getvar(key);
     }
 
     void set_env_var(const char* key, const char* value) noexcept
     {
-        auto ec = _putenv_s(key, value);
-        _ASSERTE(ec == 0);
-        g_env.invalidate();
+        environ_.setvar(key, value);
+    }
+
+    void rm_env_var(const char* key) noexcept
+    {
+        environ_.rmvar(key);
     }
 
     const char env_path_sep = ';';

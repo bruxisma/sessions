@@ -2,17 +2,13 @@
 #include <iostream>
 
 
-int main(int argc, char const *argv[])
+int main()
 {
     ixm::session::arguments args;
-    bool argc_check = args.argc() == argc;
-    auto a1 = args[0];
-    
     ixm::session::environment env;
 
     int i = 0;
     std::cout << "Args:\n";
-
 
     for (auto& a : args)
     {
@@ -20,28 +16,32 @@ int main(int argc, char const *argv[])
     }
 
     i = 0;
-    std::cout << "\nEnv:\n";
+    std::cout << "\n" "Env (size: " << env.size() << "):\n";
 
     for (auto e : env)
     {
         std::cout << i++ << ": " << e << '\n';
     }
 
-    std::string_view usrname = env["USERNAME"];
-    std::cout << '\n' << "username before: " << usrname << '\n';
+    auto usrname = env["USERNAME"];
+    std::cout << '\n' << "username before: " << (std::string_view)usrname << '\n';
 
-    env["USERNAME"] = "Fulano";
+    usrname = "Fulano";
 
     std::cout << '\n' << "username after: " << (std::string_view)env["USERNAME"] << '\n';
 
-    i = 0;
-    std::cout << "\nEnv:\n";
+    auto memeIt = env.find("HAVE_PHONES");
 
-    for (auto e : env)
+    auto[path_begin, path_end] = env["PATH"].split();
+
+    puts("\n" "PATH split:");
+    for (auto it = path_begin; it != path_end; it++)
     {
-        i++;
+        std::cout << *it << '\n';
     }
+
+    env["DRUAGA1"] = "WEED";
+    
 
     return 0;
 }
-    

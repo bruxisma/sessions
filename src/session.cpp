@@ -1,65 +1,37 @@
 #include "ixm/session.hpp"
+#include "impl.hpp"
 #include <cstdlib>
-#include <algorithm>
 
-
-namespace
-{
-    struct ci_char_traits : public std::char_traits<char> {
-        static char to_upper(char ch) {
-            return toupper((unsigned char)ch);
-        }
-        static bool eq(char c1, char c2) {
-            return to_upper(c1) == to_upper(c2);
-        }
-        static bool lt(char c1, char c2) {
-            return to_upper(c1) < to_upper(c2);
-        }
-        static int compare(const char* s1, const char* s2, size_t n) {
-            while (n-- != 0) {
-                if (to_upper(*s1) < to_upper(*s2)) return -1;
-                if (to_upper(*s1) > to_upper(*s2)) return 1;
-                ++s1; ++s2;
-            }
-            return 0;
-        }
-        static const char* find(const char* s, int n, char a) {
-            auto const ua(to_upper(a));
-            while (n-- != 0)
-            {
-                if (to_upper(*s) == ua)
-                    return s;
-                s++;
-            }
-            return nullptr;
-        }
-    };
-
-    using ci_string_view = std::basic_string_view<char, ci_char_traits>;
-}
 
 namespace ixm::session 
 {
-    // env
+    // env::variable
     environment::variable::operator std::string_view() const noexcept
     {
-        return m_value;
+        auto val = impl::get_env_var(m_key.c_str());
+        
+        if (val) {
+            return val;
+        } else {
+            return {};
+        }
     }
     
-    auto environment::variable::operator=(std::string_view str) -> variable&
+    auto environment::variable::operator=(std::string_view value) -> variable&
     {
-        // TODO: check for null termination
-        m_value = str;
-        impl::set_env_var(key().data(), str.data());
+        std::string val { value };
+        impl::set_env_var(m_key.c_str(), val.c_str());
         return *this;
     }
 
-    std::string_view environment::variable::key() const noexcept
+    auto environment::variable::split() const -> std::pair<path_iterator, path_iterator>
     {
-        return m_key;
+        auto value = this->operator std::string_view();
+        return { path_iterator{impl::env_path_sep, value}, path_iterator{} };
     }
 
 
+    // env
     auto environment::operator[] (const std::string& str) const noexcept -> variable
     {
         return operator[](str.c_str());
@@ -67,18 +39,19 @@ namespace ixm::session
 
     auto environment::operator[] (std::string_view str) const -> variable
     {
-        auto value = search_env(str);
-        return value.empty() ? variable{ str } : variable{str, value};
+        std::string val { str };
+        return operator[](val.c_str());
     }
 
     auto environment::operator[] (const char*str) const noexcept -> variable
     {
-        return operator[](std::string_view{ str });
+        return variable{str};
     }
 
-    bool environment::contains(std::string_view thingy) const noexcept
+    bool environment::contains(std::string_view key) const noexcept
     {
-        return !search_env(thingy).empty();
+        auto thingy = std::string(key);
+        return impl::get_env_var(thingy.c_str()) != nullptr;
     }
 
     auto environment::cbegin() const noexcept -> iterator
@@ -88,34 +61,18 @@ namespace ixm::session
 
     auto environment::cend() const noexcept -> iterator
     {
-        return iterator{};
+        return iterator{impl::envp() + size()};
     }
 
-    std::string_view environment::search_env(std::string_view thingy) const noexcept
+    auto environment::size() const noexcept -> size_type
     {
-        ci_string_view key{ thingy.data(), thingy.length() };
-        auto** env = impl::envp();
-
-        for (size_t i = 0; env[i]; i++)
-        {
-            ci_string_view current = env[i];
-            const auto eqpos = current.find('=');
-
-            auto ck = current;
-            std::string_view cv = { current.data(), current.length() };
-
-            ck.remove_suffix(current.size() - eqpos);
-
-            if (ck == key)
-            {
-                cv.remove_prefix(eqpos + 1);
-                return cv;
-            }
-        }
-
-        return {};
+        return impl::env_size();
     }
 
+    void environment::internal_erase(const char* k) noexcept
+    {
+        impl::rm_env_var(k);
+    }
 
 
     // args
@@ -140,28 +97,17 @@ namespace ixm::session
     
     arguments::size_type arguments::size() const noexcept
     {
-        return static_cast<size_type>(argc() - 1);
+        return static_cast<size_type>(argc());
     }
 
     arguments::iterator arguments::cbegin () const noexcept
     {
-        return iterator{};
+        return iterator{argv()};
     }
 
     arguments::iterator arguments::cend () const noexcept
     {
-        return iterator(size());
-    }
-
-
-    arguments::reverse_iterator arguments::crbegin () const noexcept
-    {
-        return reverse_iterator{ cend() };
-    }
-
-    arguments::reverse_iterator arguments::crend () const noexcept
-    {
-        return reverse_iterator{ cbegin() };
+        return iterator{argv() + argc()};
     }
 
 
